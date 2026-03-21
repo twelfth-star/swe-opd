@@ -7,7 +7,7 @@
 - `goals.md`：项目总体目标、当前边界与成功标准
 - `overall-plan.md`：从基础设施到最终训练的整体阶段计划
 - `rollout-bootstrap.md`：当前阶段的具体计划，只打通模型服务侧 SGLang 与 agent rollout 侧 mini-swe-agent-plus
-- `rollout-bootstrap-practice.md`：当前阶段的中文实践记录，包含实际命令、reverse tunnel 方案与踩坑修复
+- `rollout-working-flow.md`：当前已验证可工作的精简流程，包含服务器 A / 服务器 B 的关键配置与运行命令
 
 当前阶段范围明确如下：
 
