@@ -9,6 +9,7 @@
 - 服务器 A 上成功启动 SGLang，并对外提供 OpenAI-compatible 接口
 - 服务器 B 上成功通过 mini-swe-agent-plus 在 Docker 中跑通单实例 SWE-bench rollout
 - 服务器 B 上成功跑通小规模 batch rollout（`--slice 0:3 --workers 2`）
+- 服务器 A 上成功切换到多 GPU 的 router 模式，并在不改 rollout 流程的前提下继续跑通服务器 B 的调用
 
 当前结论只覆盖 rollout 链路，不包含：
 
@@ -42,10 +43,32 @@
 SGLANG_MODEL_PATH=Kwai-Klear/Klear-AgentForge-8B
 SGLANG_HOST=0.0.0.0
 SGLANG_PORT=30000
+SGLANG_LAUNCH_MODE=single
 SGLANG_TP=1
+SGLANG_DP_SIZE=1
 SGLANG_MEM_FRACTION_STATIC=0.80
 SGLANG_MODEL_NAME=Kwai-Klear/Klear-AgentForge-8B
 ```
+
+如果服务器 A 有多张 GPU，可以切换到 router 模式，例如：
+
+```env
+SGLANG_MODEL_PATH=Kwai-Klear/Klear-AgentForge-8B
+SGLANG_HOST=0.0.0.0
+SGLANG_PORT=30000
+SGLANG_LAUNCH_MODE=router
+SGLANG_TP=1
+SGLANG_DP_SIZE=2
+SGLANG_MEM_FRACTION_STATIC=0.80
+SGLANG_EXTRA_ARGS=--trust-remote-code
+SGLANG_MODEL_NAME=Kwai-Klear/Klear-AgentForge-8B
+```
+
+经验结论：
+
+- `single` 模式适合单实例服务或 TP 扩展
+- `router` 模式更适合多 GPU 并发吞吐
+- 对服务器 B 来说，只要最终统一入口还是一个 OpenAI-compatible endpoint，后续 rollout 工序不需要改
 
 ### 服务器 B
 
@@ -141,9 +164,85 @@ bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
 bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
 ```
 
-## 5. 本次踩坑记录
+## 5. 多 GPU / router 模式补充记录
 
-### 5.1 `scripts/lib` 被 `.gitignore` 误伤
+### 5.1 运行方式
+
+当前 `start_sglang.sh` 已支持两种模式切换：
+
+- `SGLANG_LAUNCH_MODE=single`
+- `SGLANG_LAUNCH_MODE=router`
+
+其中 router 模式会使用：
+
+```bash
+python -m sglang_router.launch_server --model ... --tp-size ... --dp-size ...
+```
+
+### 5.2 典型现象
+
+router 模式启动时可能出现以下中间状态：
+
+1. `ps` 中已经出现 `sglang::router` 和多个 `sglang::server`
+2. `nvidia-smi` 显示多张 GPU 已开始吃显存
+3. 端口已经监听
+4. 但 `curl /v1/models` 一开始返回：
+
+```text
+No models available
+```
+
+这通常表示：
+
+- worker 已经在启动
+- 但尚未完全注册到 router
+
+此时不要立刻判定为失败，应该：
+
+1. 继续观察 GPU 显存是否上升
+2. 再等待几十秒后重新请求 `/v1/models`
+
+当 `/v1/models` 返回标准 JSON 列表后，说明 router 模式已 fully ready。
+
+### 5.3 验证方式
+
+在服务器 A 上建议按这个顺序验证：
+
+```bash
+nvidia-smi
+ss -ltnp | grep 30000
+curl -s http://127.0.0.1:30000/v1/models
+curl -s http://127.0.0.1:30000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer EMPTY' \
+  -d '{
+    "model": "Kwai-Klear/Klear-AgentForge-8B",
+    "messages": [{"role": "user", "content": "Reply with exactly: bootstrap-ok"}],
+    "temperature": 0.0,
+    "max_tokens": 32
+  }'
+```
+
+### 5.4 对服务器 B 的影响
+
+切换到多 GPU / router 模式后，服务器 B 侧原则上不需要修改 rollout 脚本。
+
+只需要保证：
+
+1. reverse tunnel 指向新的统一入口
+2. `REMOTE_API_BASE` 指向服务器 B 本地对应的 tunnel 端口
+
+也就是说，服务器 B 感知到的仍然只是：
+
+```env
+REMOTE_API_BASE=http://127.0.0.1:<forwarded_port>
+```
+
+而不是多个 worker 地址。
+
+## 6. 本次踩坑记录
+
+### 6.1 `scripts/lib` 被 `.gitignore` 误伤
 
 顶层 `.gitignore` 有通用规则 `lib/`，导致 `scripts/lib/common.sh` 没有被正确同步。
 
@@ -151,7 +250,7 @@ bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
 
 - 将公共脚本目录改名为 `scripts/common/common.sh`
 
-### 5.2 命令行覆盖的环境变量被 `.env` 再次覆盖
+### 6.2 命令行覆盖的环境变量被 `.env` 再次覆盖
 
 之前的 `load_bootstrap_env` 在 `source` env 文件后，会把命令行传入的变量覆盖掉。例如：
 
@@ -165,7 +264,7 @@ SGLANG_HOST=141.142.254.201 bash scripts/model_serving/check_openai_chat.sh
 
 - env 加载逻辑改为“命令行显式设置优先”
 
-### 5.3 `health_generate` 空响应导致误报
+### 6.3 `health_generate` 空响应导致误报
 
 SGLang 的 `/health_generate` 在当前环境下可能返回空 body，但服务本身是正常的。
 
@@ -174,7 +273,7 @@ SGLang 的 `/health_generate` 在当前环境下可能返回空 body，但服务
 - `check_http.sh` 不再要求 `health_generate` 必须返回 JSON
 - 对 `health_generate` 只要求 HTTP 可达
 
-### 5.4 `check_openai_chat.sh` 不如直接 `curl` 稳
+### 6.4 `check_openai_chat.sh` 不如直接 `curl` 稳
 
 在当前集群环境中，Python SDK/HTTP 客户端链路一度出现不稳定行为，而 `curl` 能稳定验证真实服务状态。
 
@@ -183,7 +282,7 @@ SGLang 的 `/health_generate` 在当前环境下可能返回空 body，但服务
 - 首次排障时优先使用 `curl`
 - 脚本 smoke 主要用于回归验证，不要替代基础网络诊断
 
-### 5.5 `swebench_add_edit_tool.yaml` 不适合当前单实例入口
+### 6.5 `swebench_add_edit_tool.yaml` 不适合当前单实例入口
 
 该模板依赖 `{{working_dir}}`，但 `swebench_single.py` 当前上下文里没有提供这个变量，导致：
 
@@ -192,8 +291,9 @@ SGLang 的 `/health_generate` 在当前环境下可能返回空 body，但服务
 修复方式：
 
 - 改用 `swebench.yaml` 作为 `MINI_BASE_CONFIG`
+- 如果需要保留 edit tool 能力，则不要直接修改 `mini-swe-agent-plus` 仓库本身，而是在 `swe-opd/config/mini_swe_agent_plus/` 下维护一份兼容副本，把 `{{working_dir}}` 改为当前环境实际提供的 `{{cwd}}`
 
-### 5.6 LiteLLM 不认识自定义模型名的成本映射
+### 6.6 LiteLLM 不认识自定义模型名的成本映射
 
 当模型名为 `Kwai-Klear/Klear-AgentForge-8B` 时，LiteLLM 的 cost calculator 不认识这个模型，导致 rollout 在成本统计阶段报错。
 
@@ -205,7 +305,7 @@ SGLang 的 `/health_generate` 在当前环境下可能返回空 body，但服务
 MSWEA_COST_TRACKING=ignore_errors
 ```
 
-### 5.7 batch 入口和单实例入口对 environment 配置的假设不同
+### 6.7 batch 入口和单实例入口对 environment 配置的假设不同
 
 `swebench_pool_way.py` 会直接调用：
 
@@ -219,7 +319,34 @@ DockerEnvironment(**config["environment"])
 
 - 在生成 rollout config 时，如果 `environment_class == "docker"`，则移除该字段
 
-## 6. 当前验收标准
+### 6.8 router 模式依赖额外组件
+
+如果使用：
+
+```env
+SGLANG_LAUNCH_MODE=router
+```
+
+则需要保证环境中已经安装 `sglang-router`。否则会出现：
+
+```text
+ModuleNotFoundError: No module named 'sglang_router'
+```
+
+### 6.9 reverse tunnel 端口冲突
+
+从服务器 A 建 reverse tunnel 到服务器 B 时，如果远端端口已被旧 tunnel 占用，会出现：
+
+```text
+Error: remote port forwarding failed for listen port ...
+```
+
+处理方式：
+
+1. 清理旧 tunnel
+2. 或者直接换一个新的 forwarded port
+
+## 7. 当前验收标准
 
 可以认定阶段完成的标准：
 
@@ -228,8 +355,9 @@ DockerEnvironment(**config["environment"])
 3. `doctor.sh` 跑通
 4. 单实例 rollout 跑通并生成 trajectory
 5. 小 batch rollout 跑通并生成 `preds.json` 与多个 trajectory
+6. 在单 GPU serving 和多 GPU router serving 之间切换后，服务器 B rollout 流程仍可复用
 
-## 7. 下一步建议
+## 8. 下一步建议
 
 当前 rollout 链路已经具备继续集成到 Slime 的前置条件。下一阶段建议按以下顺序推进：
 

@@ -40,6 +40,8 @@ You can switch between two serving modes with `SGLANG_LAUNCH_MODE`:
 - `single`: one SGLang server process, optionally using `SGLANG_TP` for tensor parallel
 - `router`: co-launch SGLang router + workers, using `SGLANG_TP` and `SGLANG_DP_SIZE`
 
+When using `router`, `/v1/models` may briefly return `No models available` during startup before workers finish registering.
+
 4. In another shell, validate:
 
 ```bash
