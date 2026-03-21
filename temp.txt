@@ -388,3 +388,11 @@ Command    : /projects/bdse/zhe3/uv_env/sglang/bin/python -m sglang_router.launc
 [2026-03-21 15:51:18 DP0] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, input throughput (token/s): 0.02, cuda graph: False
 [2026-03-21 15:51:19] INFO:     127.0.0.1:46160 - "GET /health HTTP/1.1" 200 OK
 [2026-03-21 15:51:19] INFO:     127.0.0.1:55526 - "GET /health HTTP/1.1" 200 OK
+[2026-03-21 15:52:18 DP1] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, input throughput (token/s): 0.02, cuda graph: False
+[2026-03-21 15:52:18 DP0] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, input throughput (token/s): 0.02, cuda graph: False
+[2026-03-21 15:52:19] INFO:     127.0.0.1:50554 - "GET /health HTTP/1.1" 200 OK
+[2026-03-21 15:52:19] INFO:     127.0.0.1:60646 - "GET /health HTTP/1.1" 200 OK
+[2026-03-21 15:53:18 DP1] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, input throughput (token/s): 0.02, cuda graph: False
+[2026-03-21 15:53:18 DP0] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, input throughput (token/s): 0.02, cuda graph: False
+[2026-03-21 15:53:19] INFO:     127.0.0.1:33058 - "GET /health HTTP/1.1" 200 OK
+[2026-03-21 15:53:19] INFO:     127.0.0.1:42826 - "GET /health HTTP/1.1" 200 OK
