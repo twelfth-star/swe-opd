@@ -1,0 +1,1 @@
+srun --account=bdse-delta-gpu --partition=gpuA100x8 --nodes=1 --gpus-per-node=2 --ntasks=1 --cpus-per-task=8 --mem=32GB --time=03:00:00 --pty bash

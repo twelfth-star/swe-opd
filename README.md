@@ -35,6 +35,11 @@ At the current stage, this repository only implements the bootstrap stack:
 bash scripts/model_serving/start_sglang.sh
 ```
 
+You can switch between two serving modes with `SGLANG_LAUNCH_MODE`:
+
+- `single`: one SGLang server process, optionally using `SGLANG_TP` for tensor parallel
+- `router`: co-launch SGLang router + workers, using `SGLANG_TP` and `SGLANG_DP_SIZE`
+
 4. In another shell, validate:
 
 ```bash
