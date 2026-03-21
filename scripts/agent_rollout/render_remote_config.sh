@@ -18,6 +18,9 @@ else
 fi
 
 OUTPUT_PATH="${SWE_OPD_PROJECT_ROOT}/generated/bootstrap/mini_sweagent.remote_sglang.yaml"
+if [[ -n "${REMOTE_CONFIG_OUTPUT_PATH:-}" ]]; then
+    OUTPUT_PATH="${REMOTE_CONFIG_OUTPUT_PATH}"
+fi
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
 cmd=(

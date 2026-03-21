@@ -18,7 +18,7 @@ fi
 
 "${SCRIPT_DIR}/render_remote_config.sh" >/dev/null
 
-CONFIG_PATH="${SWE_OPD_PROJECT_ROOT}/generated/bootstrap/mini_sweagent.remote_sglang.yaml"
+CONFIG_PATH="${REMOTE_CONFIG_OUTPUT_PATH:-${SWE_OPD_PROJECT_ROOT}/generated/bootstrap/mini_sweagent.remote_sglang.yaml}"
 OUTPUT_DIR="${SWEBENCH_OUTPUT_ROOT:-${SWE_OPD_PROJECT_ROOT}/outputs/agent_rollout/single}"
 mkdir -p "${OUTPUT_DIR}"
 OUTPUT_FILE="${OUTPUT_DIR}/${INSTANCE_SPEC}.traj.json"

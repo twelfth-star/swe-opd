@@ -199,3 +199,22 @@ bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
 - 服务器 B 上单实例 SWE-bench rollout 可用
 - 服务器 B 上小 batch SWE-bench rollout 可用
 - `add_edit_tool` 兼容配置可用，agent 可以成功调用 `edit_via_str_replace`
+
+## 远程 rollout service
+
+为下一阶段接入 `slime`，当前仓库已补充一套最小 HTTP rollout service：
+
+- 服务端入口：
+  - `bash scripts/agent_rollout/start_rollout_service.sh`
+- 客户端入口：
+  - `bash scripts/agent_rollout/remote_rollout.sh submit ...`
+  - `bash scripts/agent_rollout/remote_rollout.sh wait ...`
+  - `bash scripts/agent_rollout/remote_rollout.sh result ...`
+
+服务会在服务器 B 上：
+
+1. 接收单实例或 batch rollout 请求
+2. 为每个 job 生成独立的 rendered config
+3. 为每个 job 生成独立的 artifacts 目录
+4. 调用现有 `run_swebench_single.sh` 或 `run_swebench_batch.sh`
+5. 返回 job 状态、stdout/stderr tail 和结果文件路径

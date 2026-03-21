@@ -21,7 +21,10 @@ At the current stage, this repository only implements the bootstrap stack:
 - `config/bootstrap/`: example env files for model serving and agent rollout
 - `scripts/model_serving/`: serving-side launch and validation scripts
 - `scripts/agent_rollout/`: rollout-side config rendering, smoke tests, and SWE-bench scripts
+- `scripts/agent_rollout/start_rollout_service.sh`: B-side rollout HTTP service launcher
+- `scripts/agent_rollout/remote_rollout.sh`: A-side/B-side wrapper for rollout service client commands
 - `src/swe_opd/distributed_rollout.py`: small Python CLI helpers used by the shell scripts
+- `src/swe_opd/rollout_service.py`: rollout HTTP service and client
 
 ## Bootstrap Quick Start
 
@@ -76,6 +79,49 @@ bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
 
 ```bash
 bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
+```
+
+## Remote Rollout Service
+
+When moving from manual rollout to training-driven rollout, the recommended
+shape is:
+
+- server A: training + model serving
+- server B: rollout service + mini-swe-agent-plus + Docker
+
+### On server B
+
+1. Copy `config/bootstrap/rollout_service.example.env` to
+   `config/bootstrap/rollout_service.local.env`
+2. Fill in the bind address, port, and optional API token
+3. Start the service:
+
+```bash
+bash scripts/agent_rollout/start_rollout_service.sh
+```
+
+### On server A
+
+Use the wrapper below to submit and poll jobs:
+
+```bash
+bash scripts/agent_rollout/remote_rollout.sh submit \
+  --service-base http://SERVER_B_HOST:18080 \
+  --kind batch \
+  --slice 0:3 \
+  --workers 2
+```
+
+```bash
+bash scripts/agent_rollout/remote_rollout.sh wait \
+  --service-base http://SERVER_B_HOST:18080 \
+  --job-id <job_id>
+```
+
+```bash
+bash scripts/agent_rollout/remote_rollout.sh result \
+  --service-base http://SERVER_B_HOST:18080 \
+  --job-id <job_id>
 ```
 
 ## Notes
