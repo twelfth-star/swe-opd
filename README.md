@@ -1,132 +1,131 @@
 # swe-opd
 
-This repository contains the glue code for the SWE-bench agent rollout stack we
-want to build around:
+This repository contains a minimal SWE-bench rollout stack built around:
 
 - model serving via SGLang
 - agent rollout via mini-swe-agent-plus
-- later integration into Slime for training / OPD
+- a remote rollout service between server A and server B
 
-At the current stage, this repository only implements the bootstrap stack:
+At the current stage, this repository focuses on four concrete tasks:
 
-- no training
-- no teacher
-- no OPD
-- no reward pipeline
-- just bring up SGLang serving + mini-swe-agent-plus rollout end to end
+1. Deploy and test SGLang on server A
+2. Run mini-swe-agent-plus rollout on server B against server A's SGLang
+3. Deploy and test the rollout service on server B
+4. Call the rollout service from server A and fetch trajectory results
 
 ## Layout
 
 - `plan/`: goals and planning documents
-- `config/bootstrap/`: example env files for model serving and agent rollout
-- `scripts/model_serving/`: serving-side launch and validation scripts
-- `scripts/agent_rollout/`: rollout-side config rendering, smoke tests, and SWE-bench scripts
-- `scripts/agent_rollout/start_rollout_service.sh`: B-side rollout HTTP service launcher
-- `scripts/agent_rollout/remote_rollout.sh`: A-side/B-side wrapper for rollout service client commands
+- `config/bootstrap/`: example env files
+- `scripts/model_serving/`: server A 上的 SGLang 启动与测试
+- `scripts/model_serving/start_remote_tunnel.sh`: server A 把本地模型端口反向暴露到 server B
+- `scripts/model_serving/status_remote_tunnel.sh`: server A 查看模型 reverse tunnel 状态
+- `scripts/model_serving/stop_remote_tunnel.sh`: server A 停止模型 reverse tunnel
+- `scripts/agent_runtime/`: server B 上的 rollout、service 启停与测试
+- `scripts/remote_client/`: server A 上调用 server B rollout service 的入口
+- `scripts/shared/`: shared shell helpers
 - `src/swe_opd/distributed_rollout.py`: small Python CLI helpers used by the shell scripts
 - `src/swe_opd/rollout_service.py`: rollout HTTP service and client
 
-## Bootstrap Quick Start
+## Server A: SGLang
 
-### Model Serving
-
-1. Copy `config/bootstrap/model_serving.example.env` to `config/bootstrap/model_serving.env`
+1. Copy `config/bootstrap/model_serving.example.env` to `config/bootstrap/model_serving.local.env`
 2. Fill in your model path and serving settings
-3. Run:
+3. Start:
 
 ```bash
 bash scripts/model_serving/start_sglang.sh
 ```
 
-You can switch between two serving modes with `SGLANG_LAUNCH_MODE`:
-
-- `single`: one SGLang server process, optionally using `SGLANG_TP` for tensor parallel
-- `router`: co-launch SGLang router + workers, using `SGLANG_TP` and `SGLANG_DP_SIZE`
-
-When using `router`, `/v1/models` may briefly return `No models available` during startup before workers finish registering.
-
-4. In another shell, validate:
+4. Or start in background:
 
 ```bash
-bash scripts/model_serving/check_http.sh
-bash scripts/model_serving/check_openai_chat.sh
+bash scripts/model_serving/start_sglang_nohup.sh
 ```
 
-### Agent Rollout
+5. Test:
 
-1. Copy `config/bootstrap/agent_rollout.example.env` to `config/bootstrap/agent_rollout.env`
+```bash
+bash scripts/model_serving/test_sglang.sh
+```
+
+6. If server B needs to access server A's model through `ssh -R`, start the reverse tunnel:
+
+```bash
+bash scripts/model_serving/start_remote_tunnel.sh
+bash scripts/model_serving/status_remote_tunnel.sh
+```
+
+## Server B: Direct Rollout Against A
+
+1. Copy `config/bootstrap/agent_rollout.example.env` to `config/bootstrap/agent_rollout.local.env`
 2. Fill in your `mini-swe-agent-plus` path and remote SGLang endpoint
-3. Run smoke tests:
+3. Test remote model access:
 
 ```bash
-bash scripts/agent_rollout/openai_smoke.sh
-bash scripts/agent_rollout/litellm_smoke.sh
+bash scripts/agent_runtime/test_remote_model.sh
 ```
 
-4. Render the mini-swe-agent-plus config:
+4. Run a single SWE-bench instance:
 
 ```bash
-bash scripts/agent_rollout/render_remote_config.sh
+bash scripts/agent_runtime/run_single.sh sympy__sympy-15599
 ```
 
-5. Run a single SWE-bench instance:
+5. Run a small batch:
 
 ```bash
-bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
+bash scripts/agent_runtime/run_batch.sh --slice 0:3 --workers 2
 ```
 
-6. Run a small batch:
+## Server B: Rollout Service
 
-```bash
-bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
-```
-
-## Remote Rollout Service
-
-When moving from manual rollout to training-driven rollout, the recommended
-shape is:
-
-- server A: training + model serving
-- server B: rollout service + mini-swe-agent-plus + Docker
-
-### On server B
-
-1. Copy `config/bootstrap/rollout_service.example.env` to
-   `config/bootstrap/rollout_service.local.env`
+1. Copy `config/bootstrap/rollout_service.example.env` to `config/bootstrap/rollout_service.local.env`
 2. Fill in the bind address, port, and optional API token
-3. Start the service:
+3. Start in foreground:
 
 ```bash
-bash scripts/agent_rollout/start_rollout_service.sh
+bash scripts/agent_runtime/start_service.sh
 ```
 
-### On server A
-
-Use the wrapper below to submit and poll jobs:
+4. Or start in background:
 
 ```bash
-bash scripts/agent_rollout/remote_rollout.sh submit \
-  --service-base http://SERVER_B_HOST:18080 \
-  --kind batch \
-  --slice 0:3 \
-  --workers 2
+bash scripts/agent_runtime/start_service_nohup.sh
+bash scripts/agent_runtime/status_service.sh
 ```
 
-```bash
-bash scripts/agent_rollout/remote_rollout.sh wait \
-  --service-base http://SERVER_B_HOST:18080 \
-  --job-id <job_id>
-```
+5. Stop:
 
 ```bash
-bash scripts/agent_rollout/remote_rollout.sh result \
-  --service-base http://SERVER_B_HOST:18080 \
-  --job-id <job_id>
+bash scripts/agent_runtime/stop_service.sh
+```
+
+## Server A: Call Server B Rollout Service
+
+1. Copy `config/bootstrap/remote_rollout_client.example.env` to `config/bootstrap/remote_rollout_client.local.env`
+2. Fill in the SSH host/user/key for server B
+3. Run a single rollout:
+
+```bash
+bash scripts/remote_client/run_rollout.sh single sympy__sympy-15599
+```
+
+4. Run a batch rollout:
+
+```bash
+bash scripts/remote_client/run_rollout.sh batch --slice 0:3 --workers 2
+```
+
+5. Reset the common A↔B connections and start over:
+
+```bash
+bash scripts/remote_client/reset_connections.sh
 ```
 
 ## Notes
 
-- The rollout-side wrappers always pass `--model` explicitly to
+- The rollout wrappers always pass `--model` explicitly to
   `swebench_pool_way.py`, because the local `mini-swe-agent-plus` version in
   this workspace assumes `model` is not `None`.
 - The helper scripts do not assume that model serving and agent rollout use the

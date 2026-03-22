@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../common/common.sh"
+source "${SCRIPT_DIR}/../shared/common.sh"
 
 load_bootstrap_env agent_rollout
 require_env MINI_SWE_AGENT_PLUS_ROOT

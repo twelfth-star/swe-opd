@@ -4,16 +4,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../common/common.sh"
+source "${SCRIPT_DIR}/../shared/common.sh"
 
 load_bootstrap_env agent_rollout
 require_env MINI_SWE_AGENT_PLUS_ROOT
 require_env REMOTE_MODEL_NAME
 
-"${SCRIPT_DIR}/render_remote_config.sh" >/dev/null
+"${SCRIPT_DIR}/render_config.sh" >/dev/null
 
 CONFIG_PATH="${REMOTE_CONFIG_OUTPUT_PATH:-${SWE_OPD_PROJECT_ROOT}/generated/bootstrap/mini_sweagent.remote_sglang.yaml}"
-OUTPUT_ROOT="${SWEBENCH_OUTPUT_ROOT:-${SWE_OPD_PROJECT_ROOT}/outputs/agent_rollout/batch}"
+OUTPUT_ROOT="${SWEBENCH_OUTPUT_ROOT:-${SWE_OPD_PROJECT_ROOT}/outputs/agent_runtime/batch}"
 if [[ -n "${SWEBENCH_OUTPUT_DIR:-}" ]]; then
     OUTPUT_DIR="${SWEBENCH_OUTPUT_DIR}"
 else

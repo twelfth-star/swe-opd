@@ -146,11 +146,19 @@ MINI_BASE_CONFIG=/home/zhongmouhe/swe-re/swe-opd/config/mini_swe_agent_plus/sweb
 
 这份兼容版配置已经过端到端验证，agent 可以成功使用 `edit_via_str_replace`。
 
-### 5. smoke test
+### 5. 简单测试
 
 ```bash
 cd /home/zhongmouhe/swe-re/swe-opd
-bash scripts/agent_rollout/doctor.sh
+bash scripts/agent_runtime/test_remote_model.sh
+```
+
+### 6. 一键启动 rollout service
+
+```bash
+cd /home/zhongmouhe/swe-re/swe-opd
+bash scripts/agent_runtime/start_service_nohup.sh
+bash scripts/agent_runtime/status_service.sh
 ```
 
 ## 单实例 rollout
@@ -159,7 +167,7 @@ bash scripts/agent_rollout/doctor.sh
 
 ```bash
 cd /home/zhongmouhe/swe-re/swe-opd
-bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
+bash scripts/agent_runtime/run_single.sh sympy__sympy-15599
 ```
 
 ### add_edit_tool 配置
@@ -168,7 +176,7 @@ bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
 cd /home/zhongmouhe/swe-re/swe-opd
 PYTHONPATH=/home/zhongmouhe/swe-re/mini-swe-agent-plus/src:$PYTHONPATH \
 MINI_BASE_CONFIG=/home/zhongmouhe/swe-re/swe-opd/config/mini_swe_agent_plus/swebench_add_edit_tool_compat.yaml \
-bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
+bash scripts/agent_runtime/run_single.sh sympy__sympy-15599
 ```
 
 ## 小 batch rollout
@@ -177,7 +185,7 @@ bash scripts/agent_rollout/run_swebench_single.sh sympy__sympy-15599
 
 ```bash
 cd /home/zhongmouhe/swe-re/swe-opd
-bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
+bash scripts/agent_runtime/run_batch.sh --slice 0:3 --workers 2
 ```
 
 ### add_edit_tool 配置
@@ -186,7 +194,7 @@ bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
 cd /home/zhongmouhe/swe-re/swe-opd
 PYTHONPATH=/home/zhongmouhe/swe-re/mini-swe-agent-plus/src:$PYTHONPATH \
 MINI_BASE_CONFIG=/home/zhongmouhe/swe-re/swe-opd/config/mini_swe_agent_plus/swebench_add_edit_tool_compat.yaml \
-bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
+bash scripts/agent_runtime/run_batch.sh --slice 0:3 --workers 2
 ```
 
 ## 成功标准
@@ -205,16 +213,27 @@ bash scripts/agent_rollout/run_swebench_batch.sh --slice 0:3 --workers 2
 为下一阶段接入 `slime`，当前仓库已补充一套最小 HTTP rollout service：
 
 - 服务端入口：
-  - `bash scripts/agent_rollout/start_rollout_service.sh`
-- 客户端入口：
-  - `bash scripts/agent_rollout/remote_rollout.sh submit ...`
-  - `bash scripts/agent_rollout/remote_rollout.sh wait ...`
-  - `bash scripts/agent_rollout/remote_rollout.sh result ...`
+  - `bash scripts/agent_runtime/start_service.sh`
 
 服务会在服务器 B 上：
 
 1. 接收单实例或 batch rollout 请求
 2. 为每个 job 生成独立的 rendered config
 3. 为每个 job 生成独立的 artifacts 目录
-4. 调用现有 `run_swebench_single.sh` 或 `run_swebench_batch.sh`
+4. 调用现有 `run_single.sh` 或 `run_batch.sh`
 5. 返回 job 状态、stdout/stderr tail 和结果文件路径
+
+## 服务器 A：一键调用服务器 B
+
+服务器 A 侧新增了面向日常使用的入口：
+
+- `bash scripts/remote_client/run_rollout.sh single <instance_id>`
+- `bash scripts/remote_client/run_rollout.sh batch --slice 0:3 --workers 2`
+
+它会自动完成：
+
+1. 读取 `remote_rollout_client.local.env`
+2. 如有需要，创建到服务器 B 的本地 SSH tunnel
+3. 提交 rollout job
+4. 等待 job 完成
+5. 拉取结果并保存到服务器 A 本地

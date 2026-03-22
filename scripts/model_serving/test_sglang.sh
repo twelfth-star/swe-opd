@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../common/common.sh"
+source "${SCRIPT_DIR}/../shared/common.sh"
 
 load_bootstrap_env model_serving
 
@@ -18,6 +18,9 @@ if [[ -n "${SGLANG_MODEL_NAME:-}" ]]; then
 else
     MODEL_NAME="${SGLANG_MODEL_PATH}"
 fi
+
+"$(bootstrap_python_bin)" -m swe_opd.distributed_rollout probe-sglang \
+    --api-base "http://${SGLANG_HOST}:${SGLANG_PORT}"
 
 "$(bootstrap_python_bin)" -m swe_opd.distributed_rollout openai-smoke \
     --api-base "http://${SGLANG_HOST}:${SGLANG_PORT}" \

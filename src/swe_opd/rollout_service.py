@@ -243,7 +243,7 @@ def build_rollout_command(*, request_payload: dict[str, Any], project_root: Path
         env["SWEBENCH_OUTPUT_ROOT"] = str(job_dir / "artifacts")
         cmd = [
             "bash",
-            str(project_root / "scripts/agent_rollout/run_swebench_single.sh"),
+            str(project_root / "scripts/agent_runtime/run_single.sh"),
             str(instance_spec),
         ]
         cmd.extend([str(arg) for arg in request_payload.get("extra_args", [])])
@@ -253,7 +253,7 @@ def build_rollout_command(*, request_payload: dict[str, Any], project_root: Path
         env["SWEBENCH_OUTPUT_DIR"] = str(job_dir / "artifacts")
         cmd = [
             "bash",
-            str(project_root / "scripts/agent_rollout/run_swebench_batch.sh"),
+            str(project_root / "scripts/agent_runtime/run_batch.sh"),
         ]
 
         if request_payload.get("slice"):
